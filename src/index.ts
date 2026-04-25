@@ -11,6 +11,9 @@ import {
 } from "./routes/sessions";
 import { verifyRoute } from "./routes/verify";
 import { settleRoute } from "./routes/settle";
+import { payGetAmountRoute } from "./routes/pay-getAmount";
+import { payVerifyRoute } from "./routes/pay-verify";
+import { paySettleRoute } from "./routes/pay-settle";
 
 async function main() {
   const cfg = loadConfig();
@@ -36,6 +39,18 @@ async function main() {
   app.get("/sessions/:id", getSessionRoute(storage));
   app.post("/verify", verifyRoute(cfg, storage));
   app.post("/settle", settleRoute(cfg, storage, connection, kora));
+
+  // Single-payment "Pay 1 INCO" demo (used by IncoPay /started). Namespaced
+  // under /pay so it doesn't collide with the session-scheme /verify /settle.
+  app.post("/pay/getAmount", payGetAmountRoute());
+  app.get("/pay/getAmount", (_req, res) =>
+    res.json({
+      endpoint: "/pay/getAmount",
+      description: "POST { amount, decimals } to get ECIES ciphertext",
+    })
+  );
+  app.post("/pay/verify", payVerifyRoute());
+  app.post("/pay/settle", paySettleRoute(cfg, connection));
 
   app.listen(cfg.port, () => {
     console.log(

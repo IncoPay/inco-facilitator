@@ -18,10 +18,21 @@ function opt(name: string, fallback: string): string {
 }
 
 function loadKeypair(keyPath: string): Keypair {
+  // Inline keypair env var (Railway / production deploys) takes precedence
+  // over file path. Accepts either a JSON array `[1,2,...]` or a base64-encoded
+  // 64-byte secret.
+  const inline = process.env.FACILITATOR_KEYPAIR;
+  if (inline) {
+    const trimmed = inline.trim();
+    if (trimmed.startsWith("[")) {
+      const arr = JSON.parse(trimmed) as number[];
+      return Keypair.fromSecretKey(Uint8Array.from(arr));
+    }
+    return Keypair.fromSecretKey(Uint8Array.from(Buffer.from(trimmed, "base64")));
+  }
   const absPath = path.isAbsolute(keyPath)
     ? keyPath
     : path.resolve(process.cwd(), keyPath);
-  // try ../ first (repo root), then local
   const candidates = [absPath, path.resolve(process.cwd(), "..", keyPath)];
   for (const p of candidates) {
     if (fs.existsSync(p)) {
@@ -30,7 +41,7 @@ function loadKeypair(keyPath: string): Keypair {
     }
   }
   throw new Error(
-    `Keypair file not found at ${candidates.join(" or ")}. Set FACILITATOR_KEYPAIR_PATH.`
+    `Keypair file not found at ${candidates.join(" or ")} and FACILITATOR_KEYPAIR not set.`
   );
 }
 
@@ -56,7 +67,8 @@ export function loadConfig(): FacilitatorConfig {
   );
   const tokenMintStr = process.env.TOKEN_MINT;
   return {
-    port: parseInt(opt("FACILITATOR_PORT", "4021"), 10),
+    // Railway / many PaaS set PORT; honor that first, then FACILITATOR_PORT, then default
+    port: parseInt(process.env.PORT || process.env.FACILITATOR_PORT || "4021", 10),
     network: opt("NETWORK", "solana:devnet"),
     solanaRpcUrl: opt("SOLANA_RPC_URL", "https://api.devnet.solana.com"),
     koraRpcUrl: opt("KORA_RPC_URL", "http://localhost:8080/"),
